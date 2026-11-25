@@ -16,7 +16,7 @@ Este roadmap muestra cómo evoluciona el Loan Origination System, fase por fase.
 | N.º | Rama | Resultado | Estado |
 |---|---|---|---|
 | 00 | architecture/00-project-foundation | Proyecto Spring Boot base, paquetes hexagonales, requerimientos y roadmap | ✅ |
-| 01 | architecture/01-domain-foundation | Base del dominio: `AggregateRoot`, `DomainEvent`, validaciones, excepciones y VOs compartidos | ⏳ |
+| 01 | architecture/01-domain-foundation | Base del dominio: `AggregateRoot`, `DomainEvent`, validaciones, excepciones y VOs compartidos, con sus pruebas | ✅ |
 | 02 | architecture/02-credit-domain | `CreditProduct`, `Customer` y `LoanApplication` con estados, observaciones, recomendación, cuota y plan de pagos | ⏳ |
 | 03 | architecture/03-domain-testing | Pruebas unitarias del dominio y reglas de arquitectura | ⏳ |
 | 04 | architecture/04-use-cases | Puertos de entrada y salida, servicios de casos de uso y adaptadores en memoria | ⏳ |
@@ -40,7 +40,11 @@ Este roadmap muestra cómo evoluciona el Loan Origination System, fase por fase.
 - `DomainEvent` con identificador y fecha de ocurrencia.
 - `Validate` con validaciones reutilizables (no nulo, no vacío, longitud, rango).
 - Jerarquía de excepciones: `DomainException`, `ValueObjectException`, `BusinessRuleException`.
-- VOs compartidos: `Money`, `Email`, `PhoneNumber`, `DocumentNumber`, `FirstName`, `LastName`.
+- VOs compartidos: `Money`, `Email`, `PhoneNumber`, `DocumentNumber` (con `DocumentType`: CC, CE, PA), `FirstName`, `LastName`.
+- `AggregateRoot<ID>` compara por identidad: dos agregados con el mismo id son el mismo agregado.
+- `Money` siempre tiene 2 decimales con redondeo `HALF_EVEN`, moneda COP por defecto y nunca es negativo.
+- `PhoneNumber` acepta números colombianos de 10 dígitos (celular `3XX` o fijo `60X`), con o sin `+57`.
+- Pruebas unitarias de cada VO, de `Validate` y de `AggregateRoot` (59 pruebas, sin Spring).
 
 ### 02 — Dominio de crédito
 
@@ -52,7 +56,7 @@ Este roadmap muestra cómo evoluciona el Loan Origination System, fase por fase.
 
 ### 03 — Pruebas del dominio
 
-- Pruebas de cada VO (casos válidos e inválidos).
+- Pruebas de los VOs y agregados de crédito (los VOs compartidos ya se prueban en la fase 01).
 - Pruebas de todas las transiciones de estado, permitidas y rechazadas.
 - Pruebas de las reglas RN-01 a RN-13 y del plan de pagos.
 - Reglas de arquitectura que fallan si el dominio o la aplicación dependen de Spring o de la infraestructura.
