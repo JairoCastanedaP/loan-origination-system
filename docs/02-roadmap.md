@@ -17,7 +17,7 @@ Este roadmap muestra cómo evoluciona el Loan Origination System, fase por fase.
 |---|---|---|---|
 | 00 | architecture/00-project-foundation | Proyecto Spring Boot base, paquetes hexagonales, requerimientos y roadmap | ✅ |
 | 01 | architecture/01-domain-foundation | Base del dominio: `AggregateRoot`, `DomainEvent`, validaciones, excepciones y VOs compartidos, con sus pruebas | ✅ |
-| 02 | architecture/02-credit-domain | `CreditProduct`, `Customer` y `LoanApplication` con estados, observaciones, recomendación, cuota y plan de pagos | ⏳ |
+| 02 | architecture/02-credit-domain | `CreditProduct`, `Customer` y `LoanApplication` con estados, observaciones, recomendación, cuota y plan de pagos | ✅ |
 | 03 | architecture/03-domain-testing | Pruebas unitarias del dominio y reglas de arquitectura | ⏳ |
 | 04 | architecture/04-use-cases | Puertos de entrada y salida, servicios de casos de uso y adaptadores en memoria | ⏳ |
 | 05 | architecture/05-rest-adapter | API REST v1, DTOs, manejo de errores y Swagger | ⏳ |
@@ -48,17 +48,24 @@ Este roadmap muestra cómo evoluciona el Loan Origination System, fase por fase.
 
 ### 02 — Dominio de crédito
 
-- `CreditProduct` con `InterestRate`, rango de `Term` y de `Money`, tarifa de estudio y requisitos.
-- `Customer` con ingreso mensual.
-- `LoanApplication` como raíz de agregado: `LoanApplicationStatus.transitionTo(...)`, requisitos cargados, observaciones con fecha límite, recomendación automática, decisión, plan de pagos y desembolso.
-- Cálculo de cuota por amortización francesa con `BigDecimal`.
-- Eventos de dominio de cada cambio de estado.
+- `CreditProduct` con `InterestRate` (E.A. y su tasa mensual equivalente), rango de `Term` y de `Money`, tarifa de estudio, `RequirementType` exigidos y activación.
+- `Customer` con documento, nombres, contacto e ingreso mensual.
+- `LoanApplication` como raíz de agregado:
+  - Al crearse copia las condiciones del producto (tasa, tarifa y requisitos), para que un cambio posterior del producto no altere solicitudes en curso.
+  - `LoanApplicationStatus.transitionTo(...)` controla las 11 transiciones del diagrama.
+  - Requisitos cargados (`SubmittedRequirement`), pago del estudio (`StudyFeePayment`), observaciones con fecha límite (`Observation`), evaluación (`RiskAssessment`), decisión (`Decision`), plan de pagos y desembolso.
+  - Recibe la fecha (`now`) como parámetro: el dominio no lee el reloj del sistema.
+- `CreditPolicy` concentra los parámetros configurables y las reglas RN-05 a RN-08; `CreditPolicy.standard()` trae los valores aprobados.
+- `AmortizationCalculator` (servicio de dominio) calcula la cuota fija y el plan de pagos; la última cuota ajusta el redondeo para que el capital pagado sea exactamente el monto prestado.
+- Eventos de dominio (`record`): `LoanApplicationStatusChanged` en cada transición (para el seguimiento) y `Submitted`, `Observed`, `Remediated`, `Approved`, `Rejected`, `Disbursed`, `Expired` (para notificaciones).
+- RN-12 (una solicitud abierta por cliente y producto) necesita consultar otras solicitudes: la valida el caso de uso en la fase 04.
+- Pruebas de las reglas principales y del cálculo de la cuota contra valores de referencia (79 pruebas en total).
 
 ### 03 — Pruebas del dominio
 
-- Pruebas de los VOs y agregados de crédito (los VOs compartidos ya se prueban en la fase 01).
-- Pruebas de todas las transiciones de estado, permitidas y rechazadas.
-- Pruebas de las reglas RN-01 a RN-13 y del plan de pagos.
+- Pruebas de los VOs de crédito (`InterestRate`, `Term`, `ApplicationNumber`, `CreditScore`) y de `CreditProduct` y `Customer`.
+- Pruebas parametrizadas de todas las transiciones de estado, permitidas y rechazadas.
+- Casos límite de las reglas (umbral exacto de score, de capacidad y de comité; vencimiento justo en la fecha límite).
 - Reglas de arquitectura que fallan si el dominio o la aplicación dependen de Spring o de la infraestructura.
 
 ### 04 — Casos de uso
