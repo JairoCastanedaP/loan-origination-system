@@ -6,7 +6,7 @@
 **Tipo:** Backend de originación de créditos de consumo (de la solicitud al desembolso)
 **Arquitectura:** Hexagonal (Puertos y Adaptadores)
 **Versión de alcance:** Inicial
-**Estado:** En definición. Las decisiones abiertas están en la sección 13.
+**Estado:** Alcance base aprobado. Las decisiones tomadas y abiertas están en la sección 13; el plan de entregas, en `02-roadmap.md`.
 
 ## 2. Problema y objetivo
 
@@ -62,11 +62,11 @@ Las reglas del negocio deben quedar aisladas de la tecnología. El núcleo (domi
 2. El cliente crea una solicitud en estado `DRAFT`, eligiendo producto, monto y plazo.
 3. El cliente carga los requisitos que exige el producto y radica la solicitud. El sistema verifica que estén los obligatorios y la pasa a `SUBMITTED`.
 4. El cliente paga la tarifa de estudio. Con el pago confirmado, la solicitud pasa a `UNDER_REVIEW`.
-5. El sistema consulta el score del cliente en la central de riesgo y calcula la cuota y la capacidad de pago.
+5. El sistema consulta el score del cliente en la central de riesgo, calcula la cuota y la capacidad de pago y emite una **recomendación automática** (`APPROVE` o `REJECT`, con sus motivos).
 6. Si falta o es inválido algún documento, el analista registra una observación y la solicitud pasa a `OBSERVED`. El cliente tiene un plazo para subsanar; al hacerlo, pasa a `REMEDIATED` y vuelve a `UNDER_REVIEW`.
 7. Si el plazo vence sin subsanar, un job pasa la solicitud a `EXPIRED`.
 8. Si el monto supera la atribución del analista, la solicitud pasa a `IN_COMMITTEE`.
-9. El analista o el comité deciden: `APPROVED` o `REJECTED` (con motivo).
+9. El analista o el comité deciden: `APPROVED` o `REJECTED` (con motivo). La recomendación automática orienta, pero la decisión final siempre es humana; si se aparta de la recomendación, debe justificarse.
 10. Al aprobar, el sistema genera el plan de pagos.
 11. Se registra el desembolso y la solicitud pasa a `DISBURSED`.
 12. Al terminar en `DISBURSED`, `REJECTED` o `EXPIRED`, se envía la encuesta de satisfacción.
@@ -86,11 +86,12 @@ Las reglas del negocio deben quedar aisladas de la tecnología. El núcleo (domi
 | RF-08 | Registrar el pago de la tarifa de estudio | Must |
 | RF-09 | Consultar el score del cliente en la central de riesgo | Must |
 | RF-10 | Calcular la cuota mensual y la capacidad de pago | Must |
+| RF-10a | Emitir una recomendación automática (`APPROVE` / `REJECT`) con sus motivos a partir del score y la capacidad de pago | Must |
 | RF-11 | Registrar observaciones sobre la solicitud | Must |
 | RF-12 | Subsanar observaciones dentro del plazo | Must |
 | RF-13 | Vencer automáticamente las solicitudes observadas sin subsanar | Must |
 | RF-14 | Escalar a comité las solicitudes que superan la atribución del analista | Should |
-| RF-15 | Aprobar o negar una solicitud, con motivo obligatorio al negar | Must |
+| RF-15 | Aprobar o negar una solicitud (analista o comité), con motivo obligatorio al negar o al apartarse de la recomendación | Must |
 | RF-16 | Generar el plan de pagos de una solicitud aprobada | Must |
 | RF-17 | Registrar el desembolso de una solicitud aprobada | Must |
 | RF-18 | Cancelar una solicitud por parte del cliente antes de la decisión | Should |
@@ -197,10 +198,11 @@ Cualquier transición no dibujada debe ser rechazada por el dominio.
 | RN-03 | La solicitud pasa a estudio solo con el pago de la tarifa de estudio confirmado |
 | RN-04 | La cuota mensual se calcula con el sistema de amortización francés (cuota fija) usando la tasa mensual equivalente a la efectiva anual |
 | RN-05 | Capacidad de pago: la cuota no puede superar el 40% del ingreso mensual del cliente |
-| RN-06 | Score menor a 500: se niega automáticamente con motivo "score insuficiente" |
+| RN-06 | La recomendación automática es `APPROVE` solo si el score es mayor o igual a 500 **y** se cumple RN-05; en otro caso es `REJECT`, con cada motivo incumplido ("score insuficiente", "capacidad de pago insuficiente") |
 | RN-07 | Montos superiores a 50.000.000 COP requieren decisión del comité |
 | RN-08 | El plazo para subsanar es de 5 días calendario desde la observación |
 | RN-09 | Negar una solicitud exige un motivo |
+| RN-09a | La decisión final siempre la toma el analista o el comité; si es distinta de la recomendación automática, la justificación es obligatoria |
 | RN-10 | Solo se desembolsa una solicitud `APPROVED`, por el monto aprobado |
 | RN-11 | El cliente solo puede cancelar en `DRAFT` o `SUBMITTED` |
 | RN-12 | Un cliente no puede tener más de una solicitud abierta (no terminal) del mismo producto |
@@ -335,8 +337,9 @@ Las pruebas replican la misma estructura en `src/test/java` (`domain`, `applicat
 1. Se puede registrar un cliente y crear una solicitud en borrador para un producto existente.
 2. Radicar sin requisitos obligatorios devuelve un error de negocio y la solicitud sigue en `DRAFT`.
 3. Con requisitos completos la solicitud pasa a `SUBMITTED`, y con el pago confirmado, a `UNDER_REVIEW`.
-4. Una solicitud con score menor a 500 queda `REJECTED` con su motivo.
-5. Una solicitud con cuota mayor al 40% del ingreso no se puede aprobar.
+4. Una solicitud con score menor a 500 recibe la recomendación `REJECT` con el motivo "score insuficiente".
+5. Una solicitud con cuota mayor al 40% del ingreso recibe la recomendación `REJECT` con el motivo "capacidad de pago insuficiente".
+5a. Aprobar una solicitud con recomendación `REJECT` sin justificación devuelve un error de negocio.
 6. Una solicitud aprobada tiene un plan de pagos cuya suma de capital es igual al monto aprobado.
 7. Toda transición no permitida devuelve un error de negocio.
 8. El seguimiento de la solicitud muestra cada cambio de estado con su fecha.
@@ -351,9 +354,15 @@ Las pruebas replican la misma estructura en `src/test/java` (`domain`, `applicat
 - El pago de la tarifa de estudio se registra como confirmado; no se integra una pasarela real.
 - El actor de cada operación se envía en el header opcional `X-User-Id`; si no llega, se registra `SYSTEM`.
 
+**Decisiones tomadas**
+
+| Fecha | Decisión |
+|---|---|
+| 2026-11-24 | Productos iniciales: *Libre inversión* (12 a 60 meses) y *Vehículo* (12 a 72 meses, exige cotización del vehículo) |
+| 2026-11-24 | La evaluación automática emite una recomendación; la decisión final siempre es del analista o del comité (RN-06, RN-09a) |
+| 2026-11-24 | Umbrales iniciales: capacidad 40%, score mínimo 500, comité desde 50.000.000 COP, subsanación en 5 días (configurables) |
+
 **Decisiones abiertas**
 
-- Productos iniciales: se proponen *Libre inversión* (12 a 60 meses) y *Vehículo* (12 a 72 meses, exige cotización del vehículo).
-- Si la evaluación automática (score y capacidad) aprueba sola cuando ambos criterios se cumplen o si siempre requiere al analista.
 - Atribución del analista por producto o única para todos.
 - Alcance final de Cassandra y RabbitMQ.

@@ -7,6 +7,7 @@ Sistema de originación de créditos construido con **Arquitectura Hexagonal (Pu
 ## Documentación
 
 - [Análisis de requerimientos](docs/01-analisis-de-requerimientos.md)
+- [Roadmap de entregas](docs/02-roadmap.md)
 
 ## Estructura
 
