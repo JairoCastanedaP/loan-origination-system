@@ -256,58 +256,43 @@ flowchart LR
 
 Paquete base: `com.co.bank.credit.loan_origination_system`
 
+El código se organiza **por módulo de negocio** y, dentro de cada módulo, por capa hexagonal (`domain`, `application`, `infrastructure`). Lo que comparten todos los módulos vive en `shared`.
+
 ```text
 loan_origination_system/
-├── domain/                     Java puro, sin dependencias externas
-│   ├── generic/                AggregateRoot, DomainEvent
-│   ├── commons/                Validaciones reutilizables
-│   ├── exceptions/             Excepciones de dominio
-│   ├── shared/                 VOs compartidos (Money, Email, DocumentNumber...)
-│   ├── customer/
-│   ├── creditproduct/
-│   ├── loanapplication/
-│   └── survey/
-├── application/
-│   ├── ports/
-│   │   ├── in/                 Casos de uso + Commands/Queries/Responses
-│   │   │   ├── customer/
-│   │   │   ├── creditproduct/
-│   │   │   ├── loanapplication/
-│   │   │   ├── survey/
-│   │   │   └── statistics/
-│   │   └── out/                Contratos hacia la infraestructura
-│   │       ├── customer/
-│   │       ├── creditproduct/
-│   │       ├── loanapplication/
-│   │       ├── survey/
-│   │       ├── statistics/
-│   │       ├── riskbureau/
-│   │       ├── tracking/
-│   │       └── notification/
-│   └── service/                Implementación de los casos de uso
-│       ├── customer/
-│       ├── creditproduct/
-│       ├── loanapplication/
-│       ├── survey/
-│       └── statistics/
-└── infrastructure/
-    ├── adapters/
-    │   ├── in/
-    │   │   ├── rest/           Controllers, DTOs, manejo de errores
-    │   │   ├── scheduler/      Jobs (vencimiento de solicitudes)
-    │   │   └── messaging/      Consumidores AMQP
-    │   └── out/
-    │       ├── persistence/
-    │       │   ├── jpa/        PostgreSQL con Spring Data JPA
-    │       │   ├── cassandra/  Seguimiento de solicitudes
-    │       │   └── inmemory/   Adaptadores para pruebas del núcleo
-    │       ├── riskbureau/     Cliente REST de la central de riesgo
-    │       ├── messaging/      Publicador RabbitMQ
-    │       └── csv/            Importación y exportación CSV
-    └── config/                 Beans de Spring y wiring de puertos
+├── loanapplication/                Solicitud de crédito (módulo central)
+│   ├── domain/                     LoanApplication, estados, CreditPolicy, Observation...
+│   │   ├── amortization/           Cuota fija y plan de pagos
+│   │   └── event/                  Eventos de dominio de la solicitud
+│   ├── application/
+│   │   ├── port/in/                Casos de uso + Commands/Queries
+│   │   ├── port/out/               Contratos hacia la infraestructura
+│   │   └── service/                Implementación de los casos de uso
+│   └── infrastructure/
+│       ├── config/                 Beans de Spring que crean los servicios
+│       ├── in/rest/                Controllers y DTOs
+│       ├── in/scheduler/           Job de vencimiento de solicitudes
+│       ├── out/persistence/        PostgreSQL con Spring Data JPA
+│       ├── out/riskbureau/         Cliente REST de la central de riesgo
+│       ├── out/tracking/           Seguimiento en Cassandra
+│       └── out/messaging/          Publicador RabbitMQ
+├── customer/                       Cliente: domain, application, infrastructure
+├── creditproduct/                  Producto de crédito: domain, application, infrastructure
+├── survey/                         Encuesta de satisfacción: domain, application, infrastructure
+├── statistics/                     Estadísticas (solo lectura) y exportación CSV
+└── shared/
+    ├── domain/
+    │   ├── kernel/                 AggregateRoot, DomainEvent
+    │   ├── model/                  VOs compartidos (Money, Email, DocumentNumber...)
+    │   ├── utils/                  Validaciones reutilizables (Validate)
+    │   └── exception/              DomainException, BusinessRuleException...
+    ├── application/
+    │   ├── exception/              Excepciones de aplicación (no encontrado, etc.)
+    │   └── port/out/               PublishDomainEventsPort
+    └── infrastructure/             Configuración y piezas técnicas comunes
 ```
 
-Las pruebas replican la misma estructura en `src/test/java` (`domain`, `application`, `infrastructure`).
+Las pruebas replican la misma estructura en `src/test/java`.
 
 ### Convenciones
 
@@ -315,8 +300,11 @@ Las pruebas replican la misma estructura en `src/test/java` (`domain`, `applicat
 - Value Objects inmutables con fábrica `of(...)` que valida al construir.
 - Enum de estado con `transitionTo(...)` que valida las transiciones permitidas.
 - Un puerto de entrada por caso de uso (`@FunctionalInterface`), con `Command` para escrituras y `Query` para lecturas, ambos como `record`.
-- Puertos de salida pequeños y específicos (`FindLoanApplicationByIdPort`, `SaveLoanApplicationPort`).
-- El dominio no tiene anotaciones de Spring ni de JPA; las entidades JPA viven en el adaptador y se mapean al dominio.
+- Puertos de salida separados por intención: `XxxCommandPort` trabaja con el agregado (buscar para modificar, guardar) y `XxxQueryPort` devuelve proyecciones de solo lectura.
+- Los servicios publican los eventos del agregado con `PublishDomainEventsPort` después de guardarlo.
+- Los servicios de aplicación no tienen anotaciones de Spring: se crean como `@Bean` en el `XxxConfig` de la infraestructura de cada módulo.
+- El dominio y la aplicación no tienen anotaciones de Spring ni de JPA; las entidades JPA viven en el adaptador y se mapean al dominio.
+- Un módulo puede usar los identificadores y VOs del dominio de otro (por ejemplo, `LoanApplication` referencia `CustomerId`), pero nunca su infraestructura.
 
 ## 11. Stack propuesto
 
