@@ -19,7 +19,7 @@ Este roadmap muestra cómo evoluciona el Loan Origination System, fase por fase.
 | 01 | architecture/01-domain-foundation | Base del dominio: `AggregateRoot`, `DomainEvent`, validaciones, excepciones y VOs compartidos, con sus pruebas | ✅ |
 | 02 | architecture/02-credit-domain | `CreditProduct`, `Customer` y `LoanApplication` con estados, observaciones, recomendación, cuota y plan de pagos | ✅ |
 | 02b | architecture/02b-feature-packages | Reorganización por módulo de negocio (`loanapplication`, `customer`, `creditproduct`, `shared`...) | ✅ |
-| 03 | architecture/03-domain-testing | Pruebas unitarias del dominio y reglas de arquitectura | ⏳ |
+| 03 | architecture/03-domain-testing | Pruebas unitarias del dominio y reglas de arquitectura | ✅ |
 | 04 | architecture/04-use-cases | Puertos de entrada y salida, servicios de casos de uso y adaptadores en memoria | ⏳ |
 | 05 | architecture/05-rest-adapter | API REST v1, DTOs, manejo de errores y Swagger | ⏳ |
 | 06 | architecture/06-persistence-adapters | PostgreSQL con Spring Data JPA y Cassandra para el seguimiento | ⏳ |
@@ -70,10 +70,21 @@ Este roadmap muestra cómo evoluciona el Loan Origination System, fase por fase.
 
 ### 03 — Pruebas del dominio
 
-- Pruebas de los VOs de crédito (`InterestRate`, `Term`, `ApplicationNumber`, `CreditScore`) y de `CreditProduct` y `Customer`.
-- Pruebas parametrizadas de todas las transiciones de estado, permitidas y rechazadas.
-- Casos límite de las reglas (umbral exacto de score, de capacidad y de comité; vencimiento justo en la fecha límite).
-- Reglas de arquitectura que fallan si el dominio o la aplicación dependen de Spring o de la infraestructura.
+- Pruebas de los VOs de crédito: `InterestRate` (tasa mensual equivalente y su vuelta a E.A.), `Term`, `CreditProductId`, `ApplicationNumber` y `CreditScore`.
+- Pruebas de `CreditProduct` (límites de RN-01, activación, rangos inconsistentes, copia defensiva de requisitos) y de `Customer`.
+- `LoanApplicationStatusTest` recorre las 121 combinaciones de estados contra una tabla escrita a mano del diagrama: 14 transiciones permitidas y 107 rechazadas.
+- Casos límite:
+  - Score exactamente 500 y capacidad exactamente 40% aprueban; 499 o 40,01% no. El porcentaje se redondea a 4 decimales, así que 40,004% cuenta como 40%.
+  - Un monto de exactamente 50.000.000 lo decide el analista; con un centavo más va al comité (RN-07).
+  - Subsanar justo en la fecha límite se permite; un segundo después la solicitud solo puede vencer (RN-08).
+- Reglas de arquitectura con ArchUnit (`HexagonalArchitectureTest`), que hacen fallar `./mvnw verify` si:
+  - Una capa depende de otra en sentido contrario (infraestructura → aplicación → dominio).
+  - El dominio usa algo distinto de `java.*` y del propio dominio.
+  - La aplicación usa Spring, Jakarta, Hibernate o Lombok, o algo fuera de la infraestructura usa Spring.
+  - `shared` depende de un módulo de negocio, o un módulo usa los adaptadores o servicios de otro.
+  - Los eventos no son `record` que implementan `DomainEvent`, o los puertos no son interfaces.
+- Las reglas de capas que aún están vacías se activan solas cuando aparecen sus primeras clases.
+- 330 pruebas en total.
 
 ### 04 — Casos de uso
 
