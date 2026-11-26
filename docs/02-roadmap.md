@@ -18,6 +18,7 @@ Este roadmap muestra cómo evoluciona el Loan Origination System, fase por fase.
 | 00 | architecture/00-project-foundation | Proyecto Spring Boot base, paquetes hexagonales, requerimientos y roadmap | ✅ |
 | 01 | architecture/01-domain-foundation | Base del dominio: `AggregateRoot`, `DomainEvent`, validaciones, excepciones y VOs compartidos, con sus pruebas | ✅ |
 | 02 | architecture/02-credit-domain | `CreditProduct`, `Customer` y `LoanApplication` con estados, observaciones, recomendación, cuota y plan de pagos | ✅ |
+| 02b | architecture/02b-feature-packages | Reorganización por módulo de negocio (`loanapplication`, `customer`, `creditproduct`, `shared`...) | ✅ |
 | 03 | architecture/03-domain-testing | Pruebas unitarias del dominio y reglas de arquitectura | ⏳ |
 | 04 | architecture/04-use-cases | Puertos de entrada y salida, servicios de casos de uso y adaptadores en memoria | ⏳ |
 | 05 | architecture/05-rest-adapter | API REST v1, DTOs, manejo de errores y Swagger | ⏳ |
@@ -31,7 +32,7 @@ Este roadmap muestra cómo evoluciona el Loan Origination System, fase por fase.
 
 - Proyecto generado con Spring Initializr: Maven, Java 25, Spring Boot 4.1.2, `groupId` `com.co.bank.credit`, `artifactId` `loan-origination-system`.
 - Dependencias mínimas: Spring Web MVC y Validation. Cada dependencia de infraestructura entra en la fase que la usa.
-- Paquete base `com.co.bank.credit.loan_origination_system` con las carpetas `domain`, `application` e `infrastructure`.
+- Paquete base `com.co.bank.credit.loan_origination_system` con las carpetas `domain`, `application` e `infrastructure` (reorganizado por módulo en la fase 02b).
 - Documentos `01-analisis-de-requerimientos.md` y `02-roadmap.md`.
 
 ### 01 — Base del dominio
@@ -61,6 +62,12 @@ Este roadmap muestra cómo evoluciona el Loan Origination System, fase por fase.
 - RN-12 (una solicitud abierta por cliente y producto) necesita consultar otras solicitudes: la valida el caso de uso en la fase 04.
 - Pruebas de las reglas principales y del cálculo de la cuota contra valores de referencia (79 pruebas en total).
 
+### 02b — Paquetes por módulo de negocio
+
+- Se alinea la estructura con la vista en clase: cada módulo (`loanapplication`, `customer`, `creditproduct`, `survey`, `statistics`) tiene su propio `domain`, `application` e `infrastructure`.
+- Lo común pasa a `shared`: `domain/kernel` (`AggregateRoot`, `DomainEvent`), `domain/model` (VOs), `domain/utils` (`Validate`), `domain/exception`, `application/exception` y `application/port/out` (`PublishDomainEventsPort`).
+- Solo se mueven paquetes; la lógica no cambia y las 79 pruebas siguen pasando.
+
 ### 03 — Pruebas del dominio
 
 - Pruebas de los VOs de crédito (`InterestRate`, `Term`, `ApplicationNumber`, `CreditScore`) y de `CreditProduct` y `Customer`.
@@ -71,8 +78,9 @@ Este roadmap muestra cómo evoluciona el Loan Origination System, fase por fase.
 ### 04 — Casos de uso
 
 - Un puerto de entrada por caso de uso con su `Command` o `Query`.
-- Puertos de salida pequeños por responsabilidad.
-- Servicios que orquestan el dominio y publican los eventos.
+- Puertos de salida por intención: `XxxCommandPort` (agregado) y `XxxQueryPort` (proyecciones de lectura).
+- Servicios sin anotaciones de Spring, creados como `@Bean` en el `XxxConfig` de cada módulo.
+- `PublishDomainEventsPort` compartido: los servicios publican los eventos después de guardar.
 - Adaptadores en memoria para ejecutar el flujo completo sin base de datos.
 - Pruebas de los servicios.
 
