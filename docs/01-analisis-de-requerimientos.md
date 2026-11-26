@@ -316,7 +316,7 @@ Las pruebas replican la misma estructura en `src/test/java`.
 | Base relacional | PostgreSQL |
 | Base NoSQL | Cassandra |
 | Mensajería | RabbitMQ |
-| Pruebas | JUnit 5, Mockito, Spring Boot Test |
+| Pruebas | JUnit 5, AssertJ, Mockito, Spring Boot Test y ArchUnit (reglas de arquitectura) |
 | Documentación API | OpenAPI (Swagger) y colección Postman |
 | Contenedores | Docker y Docker Compose |
 
