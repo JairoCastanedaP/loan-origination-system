@@ -20,9 +20,10 @@ Este roadmap muestra cómo evoluciona el Loan Origination System, fase por fase.
 | 02 | architecture/02-credit-domain | `CreditProduct`, `Customer` y `LoanApplication` con estados, observaciones, recomendación, cuota y plan de pagos | ✅ |
 | 02b | architecture/02b-feature-packages | Reorganización por módulo de negocio (`loanapplication`, `customer`, `creditproduct`, `shared`...) | ✅ |
 | 03 | architecture/03-domain-testing | Pruebas unitarias del dominio y reglas de arquitectura | ✅ |
-| 04 | architecture/04-use-cases | Puertos de entrada y salida, servicios de casos de uso y adaptadores en memoria | ⏳ |
+| 04a | architecture/04a-use-cases-intake | `Survey`, casos de uso de cliente y producto, y de la solicitud hasta el pago del estudio | ✅ |
+| 04b | architecture/04b-use-cases-review | Casos de uso de evaluación, observaciones, decisión, desembolso, cancelación, consultas y encuesta | ⏳ |
 | 05 | architecture/05-rest-adapter | API REST v1, DTOs, manejo de errores y Swagger | ⏳ |
-| 06 | architecture/06-persistence-adapters | PostgreSQL con Spring Data JPA y Cassandra para el seguimiento | ⏳ |
+| 06 | architecture/06-persistence-adapters | PostgreSQL con Spring Data JPA, Cassandra para el seguimiento y `XxxConfig` con los `@Bean` | ⏳ |
 | 07 | architecture/07-integrations | Central de riesgo simulada (REST), RabbitMQ, job de vencimiento y CSV | ⏳ |
 | 08 | architecture/08-packaging-deployment | Docker Compose, README final y colección Postman | ⏳ |
 
@@ -86,15 +87,36 @@ Este roadmap muestra cómo evoluciona el Loan Origination System, fase por fase.
 - Las reglas de capas que aún están vacías se activan solas cuando aparecen sus primeras clases.
 - 330 pruebas en total.
 
-### 04 — Casos de uso
+### 04a — Casos de uso: radicación
 
-- Un puerto de entrada por caso de uso con su `Command` o `Query`.
-- Puertos de salida por intención: `XxxCommandPort` (agregado) y `XxxQueryPort` (proyecciones de lectura).
-- Servicios sin anotaciones de Spring, creados como `@Bean` en el `XxxConfig` de cada módulo.
-- `PublishDomainEventsPort` compartido: los servicios publican los eventos después de guardar.
-- Adaptadores en memoria para ejecutar el flujo completo sin base de datos.
-- Pruebas de los servicios.
+Se limita a lo visto en clase hasta la sesión 06.
+
+- Dominio `Survey` con `Rating` (1 a 5) y el evento `SurveyAnswered`. Solo se responde con la solicitud en estado terminal (RN-13).
+- `shared/application`:
+  - `ApplicationException` y sus subclases: `InvalidCommandException`, `ResourceNotFoundException` y `ResourceAlreadyExistsException`.
+  - `Require`, que valida la presencia de datos en los `Command` y `Query`.
+  - `PublishDomainEventsPort`.
+- Casos de uso:
+
+| Módulo | Caso de uso | RF |
+|---|---|---|
+| customer | `RegisterCustomerUseCase` (documento único), `FindCustomerByIdUseCase`, `FindCustomerByDocumentUseCase` | RF-01, RF-02 |
+| creditproduct | `CreateCreditProductUseCase`, `FindCreditProductByIdUseCase` | RF-03 |
+| loanapplication | `CreateLoanApplicationUseCase` (RN-12 y número consecutivo), `AttachRequirementUseCase`, `SubmitLoanApplicationUseCase`, `RegisterStudyFeePaymentUseCase` | RF-04 a RF-08 |
+
+- Puertos de salida: `XxxCommandPort` (agregado), `XxxQueryPort` (vistas `record` de solo lectura) y `ApplicationNumberGeneratorPort`.
+- Los servicios no usan Spring y reciben un `java.time.Clock`. El año del número de solicitud se toma en la zona horaria del reloj: en Bogotá, el 31 de diciembre a las 23:30 todavía es el año anterior.
+- Antes de tomar un número consecutivo se validan el cliente, el producto, RN-12 y RN-01. Así una solicitud rechazada no consume número.
+- Las pruebas de los servicios usan dobles de prueba en memoria dentro de `src/test`; no hay adaptadores en `src/main` todavía.
+- 367 pruebas en total.
+
+### 04b — Casos de uso: estudio y cierre
+
+- Evaluar el riesgo, con `RiskBureauPort` para el score.
+- Observar, subsanar, reanudar, escalar al comité, aprobar, negar, desembolsar y cancelar.
+- Consultar la solicitud.
+- Responder la encuesta, una sola vez por solicitud.
 
 ### 05 a 08
 
-Se detallan al iniciar cada fase.
+Se detallan al iniciar cada fase. Los `XxxConfig` con `@Bean` entran en la fase 06, junto con los primeros adaptadores reales, porque sin adaptadores Spring no puede crear los servicios.
