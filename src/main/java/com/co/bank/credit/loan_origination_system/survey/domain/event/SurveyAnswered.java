@@ -1,0 +1,19 @@
+package com.co.bank.credit.loan_origination_system.survey.domain.event;
+
+import com.co.bank.credit.loan_origination_system.shared.domain.kernel.DomainEvent;
+
+import java.time.Instant;
+import java.util.UUID;
+
+public record SurveyAnswered(
+        UUID eventId,
+        Instant occurredOn,
+        UUID surveyId,
+        UUID loanApplicationId,
+        int rating) implements DomainEvent {
+
+    @Override
+    public String eventType() {
+        return "survey.answered";
+    }
+}
